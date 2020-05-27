@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:vector_math/vector_math_64.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -8,27 +9,27 @@ import 'dart:ui';
 class Material {
   Material()
       : name = '',
-        ka = Vector3.zero(),
-        kd = Vector3.zero(),
-        ks = Vector3.zero(),
+        ambient = Vector3.all(0.1),
+        diffuse = Vector3.all(0.8),
+        specular = Vector3.all(0.5),
         ke = Vector3.zero(),
         tf = Vector3.zero(),
         mapKa = '',
         mapKd = '',
         mapKe = '',
-        ns = 0,
+        shininess = 0,
         ni = 0,
-        d = 0,
+        opacity = 1.0,
         illum = 0;
   String name;
-  Vector3 ka;
-  Vector3 kd;
-  Vector3 ks;
+  Vector3 ambient;
+  Vector3 diffuse;
+  Vector3 specular;
   Vector3 ke;
   Vector3 tf;
-  double ns;
+  double shininess;
   double ni;
-  double d;
+  double opacity;
   int illum;
   String mapKa;
   String mapKd;
@@ -38,11 +39,14 @@ class Material {
 /// Loading material from Material Library File (.mtl).
 /// Reference：http://paulbourke.net/dataformats/mtl/
 ///
-Future<Map<String, Material>> loadMtl(String fileName) async {
+Future<Map<String, Material>> loadMtl(String fileName, bool isAssetFile) async {
   final materials = Map<String, Material>();
   String data;
   try {
-    data = await rootBundle.loadString(fileName);
+    if (isAssetFile)
+      data = await rootBundle.loadString(fileName);
+    else
+      data = await File(fileName).readAsString();
   } catch (_) {
     return materials;
   }
@@ -61,25 +65,29 @@ Future<Map<String, Material>> loadMtl(String fileName) async {
         break;
       case 'Ka':
         if (parts.length >= 4) {
-          final v = Vector3(double.parse(parts[1]), double.parse(parts[2]), double.parse(parts[3]));
-          material.ka = v;
+          final v = Vector3(double.parse(parts[1]), double.parse(parts[2]),
+              double.parse(parts[3]));
+          material.ambient = v;
         }
         break;
       case 'Kd':
         if (parts.length >= 4) {
-          final v = Vector3(double.parse(parts[1]), double.parse(parts[2]), double.parse(parts[3]));
-          material.kd = v;
+          final v = Vector3(double.parse(parts[1]), double.parse(parts[2]),
+              double.parse(parts[3]));
+          material.diffuse = v;
         }
         break;
       case 'Ks':
         if (parts.length >= 4) {
-          final v = Vector3(double.parse(parts[1]), double.parse(parts[2]), double.parse(parts[3]));
-          material.ks = v;
+          final v = Vector3(double.parse(parts[1]), double.parse(parts[2]),
+              double.parse(parts[3]));
+          material.specular = v;
         }
         break;
       case 'Ke':
         if (parts.length >= 4) {
-          final v = Vector3(double.parse(parts[1]), double.parse(parts[2]), double.parse(parts[3]));
+          final v = Vector3(double.parse(parts[1]), double.parse(parts[2]),
+              double.parse(parts[3]));
           material.ke = v;
         }
         break;
@@ -95,7 +103,7 @@ Future<Map<String, Material>> loadMtl(String fileName) async {
         break;
       case 'Ns':
         if (parts.length >= 2) {
-          material.ns = double.parse(parts[1]);
+          material.shininess = double.parse(parts[1]);
         }
         break;
       case 'Ni':
@@ -105,7 +113,7 @@ Future<Map<String, Material>> loadMtl(String fileName) async {
         break;
       case 'd':
         if (parts.length >= 2) {
-          material.d = double.parse(parts[1]);
+          material.opacity = double.parse(parts[1]);
         }
         break;
       case 'illum':
@@ -135,7 +143,8 @@ Future<Image> loadImageFromAsset(String fileName) {
 }
 
 /// load texture from asset
-Future<Image> loadTexture(Material material, String basePath) async {
+Future<MapEntry<String, Image>> loadTexture(
+    Material material, String basePath) async {
   // get the texture file name
   if (material == null) return null;
   String fileName = material.mapKa;
@@ -150,7 +159,7 @@ Future<Image> loadTexture(Material material, String basePath) async {
     try {
       image = await loadImageFromAsset(fileName);
     } catch (_) {}
-    if (image != null) return image;
+    if (image != null) return MapEntry(fileName, image);
     dirList.removeAt(0);
   }
   return null;
@@ -169,5 +178,11 @@ Future<Uint32List> getImagePixels(Image image) async {
 
 /// Convert Vector3 to Color
 Color toColor(Vector3 v, [double opacity = 1.0]) {
-  return Color.fromRGBO(v.r.toInt() * 255, v.g.toInt() * 255, v.b.toInt() * 255, opacity);
+  return Color.fromRGBO(
+      (v.r * 255).toInt(), (v.g * 255).toInt(), (v.b * 255).toInt(), opacity);
+}
+
+/// Convert Color to Vector3
+Vector3 fromColor(Color color) {
+  return Vector3(color.red / 255, color.green / 255, color.blue / 255);
 }
